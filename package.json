@@ -32,7 +32,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@razee/kubernetes-util": "^0.3.1",
-    "axios": "^0.25.0",
+    "axios": "^0.26.0",
     "bunyan": "^1.8.15",
     "deepmerge": "^4.2.2",
     "fs-extra": "^10.0.0",

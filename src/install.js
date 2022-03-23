@@ -20,9 +20,8 @@ const validUrl = require('valid-url');
 
 log.debug(`Running Install with args: ${JSON.stringify(argv)}`);
 
-const { KubeClass, KubeApiConfig } = require('@razee/kubernetes-util');
-const kubeApiConfig = KubeApiConfig();
-const kc = new KubeClass(kubeApiConfig);
+const { KubeClass } = require('@razee/kubernetes-util');
+const kc = new KubeClass();
 
 const objectPath = require('object-path');
 const yaml = require('js-yaml');

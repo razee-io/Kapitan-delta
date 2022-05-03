@@ -18,9 +18,8 @@ const log = require(`${__dirname}/bunyan-api`).createLogger('razeedeploy-remove'
 const argv = require('minimist')(process.argv.slice(2));
 const validUrl = require('valid-url');
 
-const { KubeClass, KubeApiConfig } = require('@razee/kubernetes-util');
-const kubeApiConfig = KubeApiConfig();
-const kc = new KubeClass(kubeApiConfig);
+const { KubeClass } = require('@razee/kubernetes-util');
+const kc = new KubeClass();
 
 const objectPath = require('object-path');
 const yaml = require('js-yaml');

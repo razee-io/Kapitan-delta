@@ -13,9 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-const { KubeClass, KubeApiConfig } = require('@razee/kubernetes-util');
-const kubeApiConfig = KubeApiConfig();
-const kc = new KubeClass(kubeApiConfig);
+const { KubeClass } = require('@razee/kubernetes-util');
+const kc = new KubeClass();
 var log = require(`${__dirname}/bunyan-api`).createLogger('delta');
 const objectPath = require('object-path');
 const yaml = require('js-yaml');

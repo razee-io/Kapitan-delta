@@ -69,6 +69,10 @@ async function main() {
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
+--niw
+    : do not install impersonation webhook
+--iw, --impersonationwebhook=''
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set, unless --niw is set
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -162,7 +166,8 @@ async function main() {
     'mustachetemplate': { install: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
     'featureflagsetld': { install: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
     'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
-    'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` }
+    'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
+    'impersonationwebhook' : { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
 
   try {
@@ -188,6 +193,12 @@ async function main() {
       await decomposeFile(ridConfigJson, applyMode);
     }
 
+    if (!installAll && (objectPath.get(resourcesObj, 'remoteresource.install') || objectPath.get(resourcesObj, 'mustachetemplate.install'))) {
+      if (!objectPath.get(resourcesObj, "impersonationwebhook.install")) {
+        objectPath.set(resourcesObj, "impersonationwebhook.install", true);
+      }
+    }
+
     for (var i = 0; i < resourceUris.length; i++) {
       if (installAll || resourceUris[i].install) {
         log.info(`=========== Installing ${resources[i]}:${resourceUris[i].install || 'Install All Resources'} ===========`);
@@ -204,6 +215,11 @@ async function main() {
             continue;
           }
         }
+
+        if (resources[i] === 'impersonationwebhook' && argv.niw) {
+          continue;
+        }
+
         let { file } = await download(resourceUris[i]);
         file = yaml.loadAll(file);
         await decomposeFile(file);

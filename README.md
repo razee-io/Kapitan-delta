@@ -50,6 +50,10 @@
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
+--niw
+    : do not install impersonation webhook
+--iw, --impersonationwebhook=''
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set, unless --niw is set
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -59,7 +63,7 @@
 -f, --force
     : overwrite prerequisite configuration already installed on the cluster (Default false)
 -a, --autoupdate
-    : will create a remoteresource that will pull and keep specified resources updated to latest (even if a version was specified). if no resources specified, will do all known resources.
+    : will create a remoteresource that will pull and keep specified resources updated to latest (even if a version was specified). if no resources specified, will do all known resources
 ```
 
 ### Remove Job Options

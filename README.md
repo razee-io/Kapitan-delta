@@ -3,6 +3,18 @@
 [![Build Status](https://travis-ci.com/razee-io/razeedeploy-delta.svg?branch=master)](https://travis-ci.com/razee-io/razeedeploy-delta)
 [![Dependabot Status](https://api.dependabot.com/badges/status?host=github&repo=razee-io/razeedeploy-delta)](https://dependabot.com)
 
+## Prerequisites
+
+The [impersonation webhook](https://github.com/razee-io/ImpersonationWebhook)
+will be installed by default when `remoteresource` or `mustachetemplate`
+controllers are installed.
+
+A secret holding certificate information must be created before the
+impersonation webhook is installed. Refer to [webhook installation instruction](https://github.com/razee-io/ImpersonationWebhook#installation).
+When installing the impersonation webhook, `razeedeploy-delta` performs step 2
+only. After the webhook is installed, a MutatingWebhookConfiguration will needed
+to be created manually (step 3).
+
 ## Running Install/Remove Job Manually
 
 1. Download [Job](https://github.com/razee-io/razeedeploy-delta/releases/latest/download/job.yaml)

@@ -28,6 +28,7 @@ const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const axios = require('axios');
 const handlebars = require('handlebars');
+const forge = require('node-forge');
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -167,7 +168,7 @@ async function main() {
     'featureflagsetld': { install: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
     'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
     'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
-    'impersonationwebhook' : { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
+    'impersonationwebhook': { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
 
   try {
@@ -216,8 +217,11 @@ async function main() {
           }
         }
 
-        if (resources[i] === 'impersonationwebhook' && argv.niw) {
-          continue;
+        if (resources[i] === 'impersonationwebhook') {
+          if (argv.niw) {
+            continue;
+          }
+          await createCert(argvNamespace, applyMode);
         }
 
         let { file } = await download(resourceUris[i]);
@@ -248,6 +252,56 @@ async function main() {
     success = false;
     log.error(e);
   }
+}
+
+async function createCert(namespace, applyMode) {
+  let pki = forge.pki;
+  let keys = pki.rsa.generateKeyPair(2048);
+  let cert = pki.createCertificate();
+
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '01';
+  cert.validity.notBefore = new Date();
+
+  let expirationDate = new Date();
+  expirationDate.setFullYear(expirationDate.getFullYear() + 10);
+  cert.validity.notAfter = expirationDate;
+
+  let attrs = [{
+    name: 'commonName',
+    value: `impersonation-webhook.${namespace}.svc`
+  }];
+
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.setExtensions([
+    {
+      name: 'basicConstraints',
+      cA: true
+    },
+    {
+      name: 'subjectKeyIdentifier'
+    },
+    {
+      name: 'subjectAltName',
+      altNames: [{
+        type: 6,
+        value: `impersonation-webhook.${namespace}.svc`
+      }]
+    }]);
+
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+
+  let certPem = pki.certificateToPem(cert);
+  let privatekeyPem = pki.privateKeyToPem(keys.privateKey);
+  let webhookConfigJson = await readYaml(`${__dirname}/resources/webhook.yaml`, {
+    desired_namespace: namespace,
+    webhook_ca: Buffer.from(certPem).toString('base64'),
+    webhook_cert: Buffer.from(certPem).toString('base64'),
+    webhook_key: Buffer.from(privatekeyPem).toString('base64'),
+  });
+
+  await decomposeFile(webhookConfigJson, applyMode);
 }
 
 async function readYaml(path, templateOptions = {}) {

@@ -70,10 +70,8 @@ async function main() {
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
---niw
-    : do not install impersonation webhook
 --iw, --impersonationwebhook=''
-    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set, unless --niw is set
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -175,6 +173,7 @@ async function main() {
     log.info('=========== Installing Prerequisites ===========');
     let preReqsJson = await readYaml(`${__dirname}/resources/preReqs.yaml`, { desired_namespace: argvNamespace });
     await decomposeFile(preReqsJson, applyMode);
+    await createRazeeConfig(argvNamespace, applyMode);
 
     let resourceUris = Object.values(resourcesObj);
     let resources = Object.keys(resourcesObj);
@@ -217,16 +216,21 @@ async function main() {
           }
         }
 
+        let certPem = '';
         if (resources[i] === 'impersonationwebhook') {
-          if (argv.niw) {
-            continue;
-          }
-          await createCert(argvNamespace, applyMode);
+          certPem = await createWebhookSecret(argvNamespace, applyMode);
         }
 
         let { file } = await download(resourceUris[i]);
         file = yaml.loadAll(file);
+
         await decomposeFile(file);
+
+        // webhook config is created after the webhook is installed.
+        if (resources[i] === 'impersonationwebhook') {
+          await createWebhookConfig(certPem, argvNamespace, applyMode);
+        }
+
         if (autoUpdate) {
           autoUpdateArray.push({ options: { url: resourceUris[i].uri.replace('{{install_version}}', (argv['fp'] || argv['file-path']) ? 'latest' : 'latest/download') } });
         }
@@ -254,7 +258,7 @@ async function main() {
   }
 }
 
-async function createCert(namespace, applyMode) {
+async function createWebhookSecret(namespace, applyMode) {
   let pki = forge.pki;
   let keys = pki.rsa.generateKeyPair(2048);
   let cert = pki.createCertificate();
@@ -294,14 +298,33 @@ async function createCert(namespace, applyMode) {
 
   let certPem = pki.certificateToPem(cert);
   let privatekeyPem = pki.privateKeyToPem(keys.privateKey);
-  let webhookConfigJson = await readYaml(`${__dirname}/resources/webhook.yaml`, {
+  let webhookSecretJson = await readYaml(`${__dirname}/resources/webhookSecret.yaml`, {
     desired_namespace: namespace,
     webhook_ca: Buffer.from(certPem).toString('base64'),
     webhook_cert: Buffer.from(certPem).toString('base64'),
     webhook_key: Buffer.from(privatekeyPem).toString('base64'),
   });
 
+  await decomposeFile(webhookSecretJson, applyMode);
+
+  return certPem;
+}
+
+async function createWebhookConfig(certPem, namespace, applyMode) {
+  let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, {
+    desired_namespace: namespace,
+    webhook_ca: Buffer.from(certPem).toString('base64')
+  });
+
   await decomposeFile(webhookConfigJson, applyMode);
+}
+
+async function createRazeeConfig(namespace, applyMode) {
+  let razeeConfigJson = await readYaml(`${__dirname}/resources/razeeConfig.yaml`, {
+    desired_namespace: namespace
+  });
+
+  await decomposeFile(razeeConfigJson, applyMode);
 }
 
 async function readYaml(path, templateOptions = {}) {

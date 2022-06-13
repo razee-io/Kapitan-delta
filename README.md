@@ -62,10 +62,8 @@ to be created manually (step 3).
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
---niw
-    : do not install impersonation webhook
 --iw, --impersonationwebhook=''
-    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set, unless --niw is set
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''

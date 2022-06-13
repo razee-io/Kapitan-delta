@@ -14,33 +14,10 @@
 # limitations under the License.
 ################################################################################
 apiVersion: v1
-kind: Secret
+kind: ConfigMap
 metadata:
-  name: impersonation
+  name: razeedeploy-config
   namespace: "{{ desired_namespace }}"
-type: kubernetes.io/tls
 data:
-  ca.crt: "{{{ webhook_ca }}}"
-  tls.crt: "{{{ webhook_cert }}}"
-  tls.key: "{{{ webhook_key }}}"
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  name: impersonation-webhook
-  namespace: "{{ desired_namespace }}"
-webhooks:
-- name: impersonation-webhook
-  rules:
-  - apiGroups:   ["deploy.razee.io"]
-    apiVersions: ["v1alpha2"]
-    operations:  ["CREATE", "UPDATE"]
-    resources:   ["mustachetemplates", "remoteresources"]
-  clientConfig:
-    service:
-      name: impersonation-webhook
-      path: "/validate"
-    caBundle: "{{{ webhook_ca }}}"
-  admissionReviewVersions: ["v1"]
-  sideEffects: None
-  timeoutSeconds: 10
+  lock-cluster: "false"
+  enable-impersonation: "false"

@@ -72,6 +72,8 @@ async function main() {
     : install mustachetemplate at a specific version (Default 'latest')
 --iw, --impersonationwebhook=''
     : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
+--iw-cert
+    : base64 encoded JSON object of webhook certificate in PEM format. The corresponding keys for CA cert, server cert, and server key are: 'ca', 'server', 'key'. If CA cert is missing, the server cert will be used as CA cert. Each key holds the base64 encoded representation of the corresponding PEM. And the whole JSON file is encoded in base64
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -133,10 +135,10 @@ async function main() {
   let rdOrgKey = argv['rd-org-key'] || argv['razeedash-org-key'] || false;
   let rdclusterId = argv['rd-cluster-id'] || argv['razeedash-cluster-id'] || false;
   let rdclusterMetadata = [];
-  const base64String = argv['rd-cluster-metadata64'] || argv['razeedash-cluster-metadata64'];
+  const razeedashMetaBase64 = argv['rd-cluster-metadata64'] || argv['razeedash-cluster-metadata64'];
   try {
-    if (base64String) {
-      const buff = new Buffer.from(base64String, 'base64');
+    if (razeedashMetaBase64) {
+      const buff = new Buffer.from(razeedashMetaBase64, 'base64');
       const valuesString = buff.toString('utf8');
       const values = JSON.parse(valuesString);
       for (var [name, value] of Object.entries(values)) {
@@ -148,7 +150,7 @@ async function main() {
       log.debug(`rdclusterMetadata is ${JSON.stringify(rdclusterMetadata)}`);
     }
   } catch (exception) {
-    log.warn(`can not decode or parse json object from razeedash-cluster-metadata ${base64String}`);
+    log.warn(`can not decode or parse json object from razeedash-cluster-metadata ${razeedashMetaBase64}`);
   }
   let applyMode = (argv.f || argv['force']) !== undefined && ((argv.f || argv['force']) === true || (argv.f || argv['force']).toLowerCase() === 'true') ? 'replace' : 'ensureExists';
 
@@ -199,6 +201,8 @@ async function main() {
       }
     }
 
+    let webhookCert = extractCustomCert(argv['iw-cert']);
+
     for (var i = 0; i < resourceUris.length; i++) {
       if (installAll || resourceUris[i].install) {
         log.info(`=========== Installing ${resources[i]}:${resourceUris[i].install || 'Install All Resources'} ===========`);
@@ -216,9 +220,8 @@ async function main() {
           }
         }
 
-        let certPem = '';
         if (resources[i] === 'impersonationwebhook') {
-          certPem = await createWebhookSecret(argvNamespace, applyMode);
+          await createWebhookSecret(webhookCert, argvNamespace, applyMode);
         }
 
         let { file } = await download(resourceUris[i]);
@@ -228,7 +231,7 @@ async function main() {
 
         // webhook config is created after the webhook is installed.
         if (resources[i] === 'impersonationwebhook') {
-          await createWebhookConfig(certPem, argvNamespace, applyMode);
+          await createWebhookConfig(webhookCert, argvNamespace, applyMode);
         }
 
         if (autoUpdate) {
@@ -258,62 +261,92 @@ async function main() {
   }
 }
 
-async function createWebhookSecret(namespace, applyMode) {
-  let pki = forge.pki;
-  let keys = pki.rsa.generateKeyPair(2048);
-  let cert = pki.createCertificate();
+function extractCustomCert(certJsonBase64) {
+  try {
+    if (certJsonBase64) {
+      const buff = new Buffer.from(certJsonBase64, 'base64');
+      const valuesString = buff.toString('utf8');
+      const values = JSON.parse(valuesString);
 
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = '01';
-  cert.validity.notBefore = new Date();
+      if (!objectPath.has(values, 'server') || !objectPath.has(values, 'key')) {
+        log.debug('Server certificate or server key is missing');
+        return null;
+      }
 
-  let expirationDate = new Date();
-  expirationDate.setFullYear(expirationDate.getFullYear() + 10);
-  cert.validity.notAfter = expirationDate;
+      return values;
+    }
+  } catch (exception) {
+    log.warn('Could not decode or parse json object from custom cert');
+  }
 
-  let attrs = [{
-    name: 'commonName',
-    value: `impersonation-webhook.${namespace}.svc`
-  }];
+  return null;
+}
 
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-  cert.setExtensions([
-    {
-      name: 'basicConstraints',
-      cA: true
-    },
-    {
-      name: 'subjectKeyIdentifier'
-    },
-    {
-      name: 'subjectAltName',
-      altNames: [{
-        type: 6,
-        value: `impersonation-webhook.${namespace}.svc`
-      }]
-    }]);
+async function createWebhookSecret(webhookCert, namespace, applyMode) {
+  if (webhookCert === null) {
+    log.debug('Create self-signed certificate');
+    let pki = forge.pki;
+    let keys = pki.rsa.generateKeyPair(2048);
+    let cert = pki.createCertificate();
 
-  cert.sign(keys.privateKey, forge.md.sha256.create());
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date();
 
-  let certPem = pki.certificateToPem(cert);
-  let privatekeyPem = pki.privateKeyToPem(keys.privateKey);
+    let expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 10);
+    cert.validity.notAfter = expirationDate;
+
+    let attrs = [{
+      name: 'commonName',
+      value: `impersonation-webhook.${namespace}.svc`
+    }];
+
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.setExtensions([
+      {
+        name: 'basicConstraints',
+        cA: true
+      },
+      {
+        name: 'subjectKeyIdentifier'
+      },
+      {
+        name: 'subjectAltName',
+        altNames: [{
+          type: 6,
+          value: `impersonation-webhook.${namespace}.svc`
+        }]
+      }]);
+
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    let certPem = pki.certificateToPem(cert);
+    let privatekeyPem = pki.privateKeyToPem(keys.privateKey);
+
+    objectPath.set(webhookCert, 'ca', Buffer.from(certPem).toString('base64'));
+    objectPath.set(webhookCert, 'server', Buffer.from(certPem).toString('base64'));
+    objectPath.set(webhookCert, 'key', Buffer.from(privatekeyPem).toString('base64'));
+  }
+
+  if (!objectPath.has(webhookCert, 'ca')) {
+    objectPath.set(webhookCert, 'ca', objectPath.get(webhookCert, 'server'));
+  }
+
   let webhookSecretJson = await readYaml(`${__dirname}/resources/webhookSecret.yaml`, {
     desired_namespace: namespace,
-    webhook_ca: Buffer.from(certPem).toString('base64'),
-    webhook_cert: Buffer.from(certPem).toString('base64'),
-    webhook_key: Buffer.from(privatekeyPem).toString('base64'),
+    webhook_ca: objectPath.get(webhookCert, 'ca'),
+    webhook_cert: objectPath.get(webhookCert, 'server'),
+    webhook_key: objectPath.get(webhookCert, 'key'),
   });
 
   await decomposeFile(webhookSecretJson, applyMode);
-
-  return certPem;
 }
 
-async function createWebhookConfig(certPem, namespace, applyMode) {
+async function createWebhookConfig(webhookCert, namespace, applyMode) {
   let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, {
     desired_namespace: namespace,
-    webhook_ca: Buffer.from(certPem).toString('base64')
+    webhook_ca: objectPath.get(webhookCert, 'ca')
   });
 
   await decomposeFile(webhookConfigJson, applyMode);

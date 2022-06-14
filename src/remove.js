@@ -122,6 +122,10 @@ async function main() {
           let wkConfigJson = await readYaml(`${__dirname}/resources/wkConfig.yaml`, { desired_namespace: argvNamespace });
           await deleteFile(wkConfigJson);
         }
+        if (resources[i] === 'impersonationwebhook') {
+          let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, { desired_namespace: argvNamespace });
+          await deleteFile(webhookConfigJson);
+        }
         let { file } = await download(resourceUris[i]);
         file = yaml.loadAll(file);
         let flatFile = flatten(file);
@@ -159,6 +163,10 @@ async function main() {
       // if watch-keeper and clustersubscription are removed in seperate runs, ridConfig will be left on the cluster
       let ridConfigJson = await readYaml(`${__dirname}/resources/ridConfig.yaml`, { desired_namespace: argvNamespace });
       await deleteFile(ridConfigJson);
+    }
+    if (removeAll || (resourcesObj['impersonationwebhook'].remove)) {
+      let webhookSecretJson = await readYaml(`${__dirname}/resources/webhookSecret.yaml`, { desired_namespace: argvNamespace });
+      await deleteFile(webhookSecretJson);
     }
 
   } catch (e) {

@@ -221,7 +221,7 @@ async function main() {
         }
 
         if (resources[i] === 'impersonationwebhook') {
-          await createWebhookSecret(webhookCert, argvNamespace, applyMode);
+          webhookCert = await createWebhookSecret(webhookCert, argvNamespace, applyMode);
         }
 
         let { file } = await download(resourceUris[i]);
@@ -284,6 +284,7 @@ function extractCustomCert(certJsonBase64) {
 
 async function createWebhookSecret(webhookCert, namespace, applyMode) {
   if (webhookCert === null) {
+    webhookCert = {};
     log.debug('Create self-signed certificate');
     let pki = forge.pki;
     let keys = pki.rsa.generateKeyPair(2048);
@@ -298,7 +299,7 @@ async function createWebhookSecret(webhookCert, namespace, applyMode) {
     cert.validity.notAfter = expirationDate;
 
     let attrs = [{
-      name: 'commonName',
+      shortName: 'CN',
       value: `impersonation-webhook.${namespace}.svc`
     }];
 
@@ -313,9 +314,14 @@ async function createWebhookSecret(webhookCert, namespace, applyMode) {
         name: 'subjectKeyIdentifier'
       },
       {
+        name: 'keyUsage',
+        keyCertSign: true,
+        cRLSign: true
+      },
+      {
         name: 'subjectAltName',
         altNames: [{
-          type: 6,
+          type: 2,
           value: `impersonation-webhook.${namespace}.svc`
         }]
       }]);
@@ -341,6 +347,7 @@ async function createWebhookSecret(webhookCert, namespace, applyMode) {
   });
 
   await decomposeFile(webhookSecretJson, applyMode);
+  return webhookCert;
 }
 
 async function createWebhookConfig(webhookCert, namespace, applyMode) {

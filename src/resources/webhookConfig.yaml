@@ -19,14 +19,16 @@ metadata:
   name: impersonation-webhook
   namespace: "{{ desired_namespace }}"
 webhooks:
-- name: impersonation-webhook
+- name: impersonation-webhook.{{ desired_namespace }}.svc
   rules:
   - apiGroups:   ["deploy.razee.io"]
     apiVersions: ["v1alpha2"]
     operations:  ["CREATE", "UPDATE"]
     resources:   ["mustachetemplates", "remoteresources"]
+    scope: "*"
   clientConfig:
     service:
+      namespace: "{{ desired_namespace }}"
       name: impersonation-webhook
       path: "/validate"
     caBundle: "{{{ webhook_ca }}}"

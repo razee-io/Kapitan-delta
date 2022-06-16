@@ -50,6 +50,10 @@
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
+--iw, --impersonationwebhook=''
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
+--iw-cert
+    : base64 encoded JSON object of webhook certificate in PEM format. The corresponding keys for CA cert, server cert, and server key are: 'ca', 'server', 'key'. If CA cert is missing, the server cert will be used as CA cert. Each key holds the base64 encoded representation of the corresponding PEM. And the whole JSON file is encoded in base64.
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -59,7 +63,7 @@
 -f, --force
     : overwrite prerequisite configuration already installed on the cluster (Default false)
 -a, --autoupdate
-    : will create a remoteresource that will pull and keep specified resources updated to latest (even if a version was specified). if no resources specified, will do all known resources.
+    : will create a remoteresource that will pull and keep specified resources updated to latest (even if a version was specified). if no resources specified, will do all known resources
 ```
 
 ### Remove Job Options
@@ -111,3 +115,6 @@ from scratch, you must first delete these resources:
 - ClusterSubscription Config: (only when installing clustersubscription)
   - ConfigMap: `razee-identity`
   - Secret: `razee-identity`
+- ImpersonationWebhook:
+  - Secret: `impersonation`
+  - MutatingWebhookConfiguration: `impersonation-webhook`

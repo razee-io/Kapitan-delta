@@ -28,6 +28,7 @@ const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const axios = require('axios');
 const handlebars = require('handlebars');
+const forge = require('node-forge');
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -69,6 +70,10 @@ async function main() {
     : install remoteresources3decrypt at a specific version (Default 'latest')
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
+--iw, --impersonationwebhook=''
+    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
+--iw-cert
+    : base64 encoded JSON object of webhook certificate in PEM format. The corresponding keys for CA cert, server cert, and server key are: 'ca', 'server', 'key'. If CA cert is missing, the server cert will be used as CA cert. Each key holds the base64 encoded representation of the corresponding PEM. And the whole JSON file is encoded in base64
 --ffsld, --featureflagsetld=''
     : install featureflagsetld at a specific version (Default 'latest')
 --er, --encryptedresource=''
@@ -130,10 +135,10 @@ async function main() {
   let rdOrgKey = argv['rd-org-key'] || argv['razeedash-org-key'] || false;
   let rdclusterId = argv['rd-cluster-id'] || argv['razeedash-cluster-id'] || false;
   let rdclusterMetadata = [];
-  const base64String = argv['rd-cluster-metadata64'] || argv['razeedash-cluster-metadata64'];
+  const razeedashMetaBase64 = argv['rd-cluster-metadata64'] || argv['razeedash-cluster-metadata64'];
   try {
-    if (base64String) {
-      const buff = new Buffer.from(base64String, 'base64');
+    if (razeedashMetaBase64) {
+      const buff = new Buffer.from(razeedashMetaBase64, 'base64');
       const valuesString = buff.toString('utf8');
       const values = JSON.parse(valuesString);
       for (var [name, value] of Object.entries(values)) {
@@ -145,7 +150,7 @@ async function main() {
       log.debug(`rdclusterMetadata is ${JSON.stringify(rdclusterMetadata)}`);
     }
   } catch (exception) {
-    log.warn(`can not decode or parse json object from razeedash-cluster-metadata ${base64String}`);
+    log.warn(`can not decode or parse json object from razeedash-cluster-metadata ${razeedashMetaBase64}`);
   }
   let applyMode = (argv.f || argv['force']) !== undefined && ((argv.f || argv['force']) === true || (argv.f || argv['force']).toLowerCase() === 'true') ? 'replace' : 'ensureExists';
 
@@ -162,13 +167,15 @@ async function main() {
     'mustachetemplate': { install: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
     'featureflagsetld': { install: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
     'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
-    'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` }
+    'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
+    'impersonationwebhook': { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
 
   try {
     log.info('=========== Installing Prerequisites ===========');
     let preReqsJson = await readYaml(`${__dirname}/resources/preReqs.yaml`, { desired_namespace: argvNamespace });
     await decomposeFile(preReqsJson, applyMode);
+    await createRazeeConfig(argvNamespace, applyMode);
 
     let resourceUris = Object.values(resourcesObj);
     let resources = Object.keys(resourcesObj);
@@ -188,6 +195,14 @@ async function main() {
       await decomposeFile(ridConfigJson, applyMode);
     }
 
+    if (!installAll && (objectPath.get(resourcesObj, 'remoteresource.install') || objectPath.get(resourcesObj, 'mustachetemplate.install'))) {
+      if (!objectPath.get(resourcesObj, "impersonationwebhook.install")) {
+        objectPath.set(resourcesObj, "impersonationwebhook.install", true);
+      }
+    }
+
+    let webhookCert = extractCustomCert(argv['iw-cert']);
+
     for (var i = 0; i < resourceUris.length; i++) {
       if (installAll || resourceUris[i].install) {
         log.info(`=========== Installing ${resources[i]}:${resourceUris[i].install || 'Install All Resources'} ===========`);
@@ -204,9 +219,21 @@ async function main() {
             continue;
           }
         }
+
+        if (resources[i] === 'impersonationwebhook') {
+          webhookCert = await createWebhookSecret(webhookCert, argvNamespace, applyMode);
+        }
+
         let { file } = await download(resourceUris[i]);
         file = yaml.loadAll(file);
+
         await decomposeFile(file);
+
+        // webhook config is created after the webhook is installed.
+        if (resources[i] === 'impersonationwebhook') {
+          await createWebhookConfig(webhookCert, argvNamespace, applyMode);
+        }
+
         if (autoUpdate) {
           autoUpdateArray.push({ options: { url: resourceUris[i].uri.replace('{{install_version}}', (argv['fp'] || argv['file-path']) ? 'latest' : 'latest/download') } });
         }
@@ -232,6 +259,112 @@ async function main() {
     success = false;
     log.error(e);
   }
+}
+
+function extractCustomCert(certJsonBase64) {
+  try {
+    if (certJsonBase64) {
+      const buff = new Buffer.from(certJsonBase64, 'base64');
+      const valuesString = buff.toString('utf8');
+      const values = JSON.parse(valuesString);
+
+      if (!objectPath.has(values, 'server') || !objectPath.has(values, 'key')) {
+        log.debug('Server certificate or server key is missing');
+        return null;
+      }
+
+      return values;
+    }
+  } catch (exception) {
+    log.warn('Could not decode or parse json object from custom cert');
+  }
+
+  return null;
+}
+
+async function createWebhookSecret(webhookCert, namespace, applyMode) {
+  if (webhookCert === null) {
+    webhookCert = {};
+    log.debug('Create self-signed certificate');
+    let pki = forge.pki;
+    let keys = pki.rsa.generateKeyPair(2048);
+    let cert = pki.createCertificate();
+
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date();
+
+    let expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 10);
+    cert.validity.notAfter = expirationDate;
+
+    let attrs = [{
+      shortName: 'CN',
+      value: `impersonation-webhook.${namespace}.svc`
+    }];
+
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.setExtensions([
+      {
+        name: 'basicConstraints',
+        cA: true
+      },
+      {
+        name: 'subjectKeyIdentifier'
+      },
+      {
+        name: 'keyUsage',
+        keyCertSign: true,
+        cRLSign: true
+      },
+      {
+        name: 'subjectAltName',
+        altNames: [{
+          type: 2,
+          value: `impersonation-webhook.${namespace}.svc`
+        }]
+      }]);
+
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    let certPem = pki.certificateToPem(cert);
+    let privatekeyPem = pki.privateKeyToPem(keys.privateKey);
+
+    objectPath.set(webhookCert, 'ca', Buffer.from(certPem).toString('base64'));
+    objectPath.set(webhookCert, 'server', Buffer.from(certPem).toString('base64'));
+    objectPath.set(webhookCert, 'key', Buffer.from(privatekeyPem).toString('base64'));
+  }
+
+  if (!objectPath.has(webhookCert, 'ca')) {
+    objectPath.set(webhookCert, 'ca', objectPath.get(webhookCert, 'server'));
+  }
+
+  let webhookSecretJson = await readYaml(`${__dirname}/resources/webhookSecret.yaml`, {
+    desired_namespace: namespace,
+    webhook_ca: objectPath.get(webhookCert, 'ca'),
+    webhook_cert: objectPath.get(webhookCert, 'server'),
+    webhook_key: objectPath.get(webhookCert, 'key'),
+  });
+
+  await decomposeFile(webhookSecretJson, applyMode);
+  return webhookCert;
+}
+
+async function createWebhookConfig(webhookCert, namespace, applyMode) {
+  let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, {
+    desired_namespace: namespace,
+    webhook_ca: objectPath.get(webhookCert, 'ca')
+  });
+
+  await decomposeFile(webhookConfigJson, applyMode);
+}
+
+async function createRazeeConfig(namespace, applyMode) {
+  let razeeConfigJson = await readYaml(`${__dirname}/resources/razeeConfig.yaml`, {
+    desired_namespace: namespace
+  });
+
+  await decomposeFile(razeeConfigJson, applyMode);
 }
 
 async function readYaml(path, templateOptions = {}) {

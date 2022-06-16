@@ -96,7 +96,8 @@ async function main() {
     'mustachetemplate': { remove: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
     'featureflagsetld': { remove: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
     'encryptedresource': { remove: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
-    'managedset': { remove: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` }
+    'managedset': { remove: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
+    'impersonationwebhook' : { remove: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
 
   let dltNamespace = typeof (argv.dn || argv['delete-namespace']) === 'boolean' ? argv.dn || argv['delete-namespace'] : false;
@@ -120,6 +121,10 @@ async function main() {
         if (resources[i] === 'watchkeeper') {
           let wkConfigJson = await readYaml(`${__dirname}/resources/wkConfig.yaml`, { desired_namespace: argvNamespace });
           await deleteFile(wkConfigJson);
+        }
+        if (resources[i] === 'impersonationwebhook') {
+          let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, { desired_namespace: argvNamespace });
+          await deleteFile(webhookConfigJson);
         }
         let { file } = await download(resourceUris[i]);
         file = yaml.loadAll(file);
@@ -158,6 +163,10 @@ async function main() {
       // if watch-keeper and clustersubscription are removed in seperate runs, ridConfig will be left on the cluster
       let ridConfigJson = await readYaml(`${__dirname}/resources/ridConfig.yaml`, { desired_namespace: argvNamespace });
       await deleteFile(ridConfigJson);
+    }
+    if (removeAll || (resourcesObj['impersonationwebhook'].remove)) {
+      let webhookSecretJson = await readYaml(`${__dirname}/resources/webhookSecret.yaml`, { desired_namespace: argvNamespace });
+      await deleteFile(webhookSecretJson);
     }
 
   } catch (e) {

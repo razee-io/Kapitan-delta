@@ -195,12 +195,6 @@ async function main() {
       await decomposeFile(ridConfigJson, applyMode);
     }
 
-    if (!installAll && (objectPath.get(resourcesObj, 'remoteresource.install') || objectPath.get(resourcesObj, 'mustachetemplate.install'))) {
-      if (!objectPath.get(resourcesObj, "impersonationwebhook.install")) {
-        objectPath.set(resourcesObj, "impersonationwebhook.install", true);
-      }
-    }
-
     let webhookCert = extractCustomCert(argv['iw-cert']);
 
     for (var i = 0; i < resourceUris.length; i++) {

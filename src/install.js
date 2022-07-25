@@ -71,7 +71,7 @@ async function main() {
 --mtp, --mustachetemplate=''
     : install mustachetemplate at a specific version (Default 'latest')
 --iw, --impersonationwebhook=''
-    : install impersonation webhook at a specific version (Default 'latest'). When remote resource controller and/or mustache template controller are installed, this webhook will be installed even if this flag is not set
+    : install impersonation webhook at a specific version (Default 'latest').
 --iw-cert
     : base64 encoded JSON object of webhook certificate in PEM format. The corresponding keys for CA cert, server cert, and server key are: 'ca', 'server', 'key'. If CA cert is missing, the server cert will be used as CA cert. Each key holds the base64 encoded representation of the corresponding PEM. And the whole JSON file is encoded in base64
 --ffsld, --featureflagsetld=''
@@ -193,12 +193,6 @@ async function main() {
         razeedash_org_key: Buffer.from(rdOrgKey || 'api-key-youorgkeyhere').toString('base64')
       });
       await decomposeFile(ridConfigJson, applyMode);
-    }
-
-    if (!installAll && (objectPath.get(resourcesObj, 'remoteresource.install') || objectPath.get(resourcesObj, 'mustachetemplate.install'))) {
-      if (!objectPath.get(resourcesObj, "impersonationwebhook.install")) {
-        objectPath.set(resourcesObj, "impersonationwebhook.install", true);
-      }
     }
 
     let webhookCert = extractCustomCert(argv['iw-cert']);

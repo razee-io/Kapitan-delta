@@ -118,3 +118,7 @@ from scratch, you must first delete these resources:
 - ImpersonationWebhook:
   - Secret: `impersonation`
   - MutatingWebhookConfiguration: `impersonation-webhook`
+
+## Razeeupdate
+
+The `update` command is used for the razeeupdate cronjob returned by the Operators System Subscription found in Razeedash-api. This will update Cluster Subscription, Remote Resource and Watch-Keeper if they already exist in the cluster.

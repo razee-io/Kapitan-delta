@@ -7,6 +7,8 @@ if (args[0].toLowerCase() === 'install') {
   require('../src/install').run();
 } else if (args[0].toLowerCase() === 'remove') {
   require('../src/remove').run();
+} else if (args[0].toLowerCase() === 'update') {
+  require('../src/update').run();
 } else {
   require('../src').run();
 }

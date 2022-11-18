@@ -16,6 +16,7 @@
 
 const log = require(`${__dirname}/bunyan-api`).createLogger('razeeupdate');
 const argv = require('minimist')(process.argv.slice(2));
+const validUrl = require('valid-url');
 const axios = require('axios');
 const { KubeClass } = require('@razee/kubernetes-util');
 const kc = new KubeClass();
@@ -28,43 +29,54 @@ var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
 
 async function main() {
-  const fileSource = argv.s || argv['file-source'];
-  
-  let csYaml;
-  let rrYaml;
-  let wkYaml;
-
-  let csurl;
-  let rrurl;
-  let wkurl;
-
-  if (fileSource) {
-    const csVer = typeof (argv.cs || argv['clustersubscription']) === 'string' ? argv.cs || argv['clustersubscription'] : 'latest';
-    const rrVer = typeof (argv.rr || argv['remoteresource']) === 'string' ? argv.rr || argv['remoteresource'] : 'latest';
-    const wkVer = typeof (argv.wk || argv['watchkeeper'] || argv['watch-keeper']) === 'string' ? argv.wk || argv['watchkeeper'] || argv['watch-keeper'] : 'latest';
-
-    csurl = `${fileSource}/ClusterSubscription/${csVer}/us/resource.yaml`;
-    rrurl = `${fileSource}/RemoteResource/${rrVer}/us/resource.yaml`;
-    wkurl = `${fileSource}/WatchKeeper/${wkVer}/us/resource.yaml`;
-
-  } else {
-    csurl = 'https://github.com/razee-io/ClusterSubscription/releases/latest/download/resource.yaml';
-    rrurl = 'https://github.com/razee-io/RemoteResource/releases/latest/download/resource.yaml';
-    wkurl = 'https://github.com/razee-io/WatchKeeper/releases/latest/download/resource.yaml';
-
+  let fileSource = typeof (argv.s || argv['file-source']) === 'string' ? argv.s || argv['file-source'] : 'https://github.com/razee-io';
+  if (!validUrl.isUri(fileSource)) {
+    success = false;
+    return log.error(`'${fileSource}' not a valid source url.`);
+  } else if (fileSource.endsWith('/')) {
+    fileSource = fileSource.replace(/\/+$/g, '');
   }
 
-  csYaml = await axios.get(csurl);
-  rrYaml = await axios.get(rrurl);
-  wkYaml = await axios.get(wkurl);
+  let filePath = typeof (argv['fp'] || argv['file-path']) === 'string' ? argv['fp'] || argv['file-path'] : 'releases/{{install_version}}/resource.yaml';
 
-  csYaml = readYaml(csYaml.data);
-  rrYaml = readYaml(rrYaml.data);
-  wkYaml = readYaml(wkYaml.data);
+  let resourcesObj = {
+    'watchkeeper': { install: argv.wk || argv['watchkeeper'] || argv['watch-keeper'], uri: `${fileSource}/WatchKeeper/${filePath}` },
+    'clustersubscription': { install: argv.cs || argv['clustersubscription'], uri: `${fileSource}/ClusterSubscription/${filePath}` },
+    'remoteresource': { install: argv.rr || argv['remoteresource'], uri: `${fileSource}/RemoteResource/${filePath}` },
+    'mustachetemplate': { install: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
+    'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` }
+  };
 
-  await decomposeFile(csYaml);
-  await decomposeFile(rrYaml);
-  await decomposeFile(wkYaml);
+  let resourceUris = Object.values(resourcesObj);
+  let installAll = resourceUris.reduce((shouldInstallAll, currentValue) => {
+    return objectPath.get(currentValue, 'install') === undefined ? shouldInstallAll : false;
+  }, true);
+
+  for (var i = 0; i < resourceUris.length; i++) {
+    if (installAll || resourceUris[i].install) {
+      let file = await download(resourceUris[i]);
+      file = readYaml(file.data);
+      await decomposeFile(file);
+    }
+  }
+  
+}
+
+async function download(resourceUriObj) {
+  let install_version = (typeof resourceUriObj.install === 'string' && resourceUriObj.install.toLowerCase() !== 'latest') ? `download/${resourceUriObj.install}` : 'latest/download';
+  if (argv['fp'] || argv['file-path']) {
+    // if file-path is defined, use the version directly
+    install_version = `${resourceUriObj.install}`;
+  }
+  let uri = resourceUriObj.uri.replace('{{install_version}}', install_version);
+  try {
+    log.info(`Downloading ${uri}`);
+    return await axios.get(uri);
+  } catch (e) {
+    let latestUri = resourceUriObj.uri.replace('{{install_version}}', (argv['fp'] || argv['file-path']) ? 'latest' : 'latest/download');
+    log.warn(`Failed to download ${uri}.. defaulting to ${latestUri}`);
+    return await axios.get(latestUri);
+  }
 
 }
 

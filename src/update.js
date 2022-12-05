@@ -147,8 +147,11 @@ async function apply(krm, file) {
     liveResource = objectPath.get(get, 'body');
     log.debug(`Get ${get.statusCode} ${uri}: resourceVersion ${objectPath.get(get, 'body.metadata.resourceVersion')}`);
   } else if (get.statusCode === 404) {
-    log.debug(`Get ${get.statusCode} ${uri} Not an attached cluster.`); //don't apply if operator doesn't already exist
-  } else {
+    log.debug(`Get ${get.statusCode} ${uri} Not an attached cluster, operators should not be updated.`); //don't apply if operator doesn't already exist
+  } else if (get.statusCode === 403) {
+    log.debug(`Get ${get.statusCode} ${uri} Missing authorization, not an attached cluster. Operators should not be applied.`); //don't apply if service account doesn't have authorization
+  }
+  else {
     log.debug(`Get ${get.statusCode} ${uri}`);
     return Promise.reject({ statusCode: get.statusCode, body: get.body });
   }

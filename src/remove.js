@@ -148,17 +148,7 @@ async function main() {
       }
     }
 
-    log.info('=========== Removing Prerequisites ===========');
-    let preReqsJson = await readYaml(`${__dirname}/resources/preReqs.yaml`, { desired_namespace: argvNamespace });
-    for (let i = 0; i < preReqsJson.length; i++) {
-      let preReq = preReqsJson[i];
-      let kind = objectPath.get(preReq, 'kind');
-      if ((kind.toLowerCase() !== 'namespace') || (kind.toLowerCase() === 'namespace' && dltNamespace)) {
-        await deleteFile(preReq);
-      } else {
-        log.info(`Skipping namespace deletion: --namespace='${argvNamespace}' --delete-namespace='${dltNamespace}'`);
-      }
-    }
+    log.info('=========== Removing Orphans ===========');
     if (removeAll || (resourcesObj['clustersubscription'].remove && resourcesObj['watch-keeper'].remove)) {
       // if watch-keeper and clustersubscription are removed in seperate runs, ridConfig will be left on the cluster
       let ridConfigJson = await readYaml(`${__dirname}/resources/ridConfig.yaml`, { desired_namespace: argvNamespace });
@@ -169,6 +159,19 @@ async function main() {
       await deleteFile(webhookSecretJson);
     }
 
+    log.info('=========== Removing Prerequisites ===========');
+    let preReqsJson = await readYaml(`${__dirname}/resources/preReqs.yaml`, { desired_namespace: argvNamespace });
+    // When deleting a list of items, delete in reverse order (N->0, not 0->N) so that parents are deleted last
+    // E.g. in this case, preReqs.yaml defines the ServiceAccount and ClusterRole before the ClusterRoleBinding. Deleting the ServiceAccount or ClusterRole first will cause an error when deleting the ClusterRoleBinding.
+    for (let i = preReqsJson.length-1; i >= 0; i--) {
+      let preReq = preReqsJson[i];
+      let kind = objectPath.get(preReq, 'kind');
+      if ((kind.toLowerCase() !== 'namespace') || (kind.toLowerCase() === 'namespace' && dltNamespace)) {
+        await deleteFile(preReq);
+      } else {
+        log.info(`Skipping namespace deletion: --namespace='${argvNamespace}' --delete-namespace='${dltNamespace}'`);
+      }i
+    }
   } catch (e) {
     success = false;
     log.error(e);
@@ -253,11 +256,13 @@ async function deleteFile(file, force = false) {
   let items = objectPath.get(file, ['items']);
 
   if (Array.isArray(file)) {
-    for (let i = 0; i < file.length; i++) {
+    // When deleting a list of items, delete in reverse order (N->0, not 0->N) so that parents are deleted last
+    for (let i = file.length-1; i >= 0; i--) {
       await deleteFile(file[i], force);
     }
   } else if (kind.toLowerCase().endsWith('list') && Array.isArray(items)) {
-    for (let i = 0; i < items.length; i++) {
+    // When deleting a list of items, delete in reverse order (N->0, not 0->N) so that parents are deleted last
+    for (let i = items.length-1; i >= 0; i--) {
       await deleteFile(items[i], force);
     }
   } else if (file) {

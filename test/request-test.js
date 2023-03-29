@@ -18,7 +18,7 @@ const assert = require('chai').assert;
 const nock = require('nock');
 const RequestLib = require('../src/request');
 const Stream = require('stream');
-const log = require('../src/bunyan-api').getLogger();
+const log = require('../src/bunyan-api').createLogger();
 
 describe('request', () => {
   describe('getStream', () => {

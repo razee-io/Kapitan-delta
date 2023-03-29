@@ -27,7 +27,7 @@ const Stream = require('stream');
 
 const merge = require('deepmerge');
 
-const logger = require('./bunyan-api').createLogger('RequestLib');
+const logger = require(`${__dirname}/bunyan-api`).createLogger('RequestLib');
 
 const allowedRequestOptions = [
   'method',                   // No conversion

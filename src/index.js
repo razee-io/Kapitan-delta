@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 IBM Corp. All Rights Reserved.
+ * Copyright 2019, 2023 IBM Corp. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const validUrl = require('valid-url');
 const clone = require('clone');
-const request = require('request-promise-native');
+const RequestLib = require('./request');
 const touch = require('touch');
 
 const lastModified = {};
@@ -80,7 +80,8 @@ async function download(uri) {
       secret: process.env.SECRET_ACCESS_KEY
     };
   }
-  let res = await request.get({
+  let res = await RequestLib.doRequest({
+    method: 'get',
     uri: uri,
     json: true,
     aws: aws,

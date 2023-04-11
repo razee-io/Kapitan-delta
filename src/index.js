@@ -86,7 +86,10 @@ async function download(uri) {
     uri: uri,
     json: true,
     aws: aws,
-    headers: {},
+    headers: {
+      // 'If-None-Match': objectPath.get(lastModified, [uri, 'etag']),
+      'If-Modified-Since': objectPath.get(lastModified, [uri, 'last-modified'])
+    },
     simple: false,
     resolveWithFullResponse: true
   });

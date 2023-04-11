@@ -20,8 +20,8 @@ const objectPath = require('object-path');
 const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const validUrl = require('valid-url');
+const RequestLib = require('@razee/request-util');
 const clone = require('clone');
-const RequestLib = require('./request');
 const touch = require('touch');
 
 const lastModified = {};
@@ -77,7 +77,8 @@ async function download(uri) {
   if (process.env.ACCESS_KEY_ID && process.env.SECRET_ACCESS_KEY) {
     aws = {
       key: process.env.ACCESS_KEY_ID,
-      secret: process.env.SECRET_ACCESS_KEY
+      secret: process.env.SECRET_ACCESS_KEY,
+      sign_version: 4
     };
   }
   let res = await RequestLib.doRequest({
@@ -85,10 +86,7 @@ async function download(uri) {
     uri: uri,
     json: true,
     aws: aws,
-    headers: {
-      // 'If-None-Match': objectPath.get(lastModified, [uri, 'etag']),
-      'If-Modified-Since': objectPath.get(lastModified, [uri, 'last-modified'])
-    },
+    headers: {},
     simple: false,
     resolveWithFullResponse: true
   });

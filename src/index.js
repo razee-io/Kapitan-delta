@@ -92,7 +92,7 @@ async function download(uri) {
     },
     simple: false,
     resolveWithFullResponse: true
-  });
+  }, log);
   if (res.statusCode >= 200 && res.statusCode < 300) {
     log.debug(`Download ${res.statusCode} ${uri}`);
 

@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 IBM Corp. All Rights Reserved.
+ * Copyright 2019, 2023 IBM Corp. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ const objectPath = require('object-path');
 const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const validUrl = require('valid-url');
+const RequestLib = require('@razee/request-util');
 const clone = require('clone');
-const request = require('request-promise-native');
 const touch = require('touch');
 
 const lastModified = {};
@@ -77,10 +77,12 @@ async function download(uri) {
   if (process.env.ACCESS_KEY_ID && process.env.SECRET_ACCESS_KEY) {
     aws = {
       key: process.env.ACCESS_KEY_ID,
-      secret: process.env.SECRET_ACCESS_KEY
+      secret: process.env.SECRET_ACCESS_KEY,
+      sign_version: 4
     };
   }
-  let res = await request.get({
+  let res = await RequestLib.doRequest({
+    method: 'get',
     uri: uri,
     json: true,
     aws: aws,

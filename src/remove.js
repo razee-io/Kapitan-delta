@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 IBM Corp. All Rights Reserved.
+ * Copyright 2020, 2023 IBM Corp. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,31 @@ const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const axios = require('axios');
 const handlebars = require('handlebars');
+
+// Track deprecated resources that may be unable to retrieve YAML due to removal
+const deprecatedResourcesObj = {
+  'encryptedresource': {
+    remove: 'DEPRECATED',
+    yaml: `
+      apiVersion: v1
+      kind: List
+      metadata:
+        name: encryptedresource-controller-list
+        annotations:
+          version: "deprecated"
+      type: array
+      items:
+        - apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: encryptedresource-controller
+        - apiVersion: apiextensions.k8s.io/v1
+          kind: CustomResourceDefinition
+          metadata:
+            name: encryptedresources.deploy.razee.io
+    `
+  },
+};
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -95,7 +120,6 @@ async function main() {
     'remoteresources3decrypt': { remove: argv.rrs3d || argv['remoteresources3decrypt'], uri: `${fileSource}/RemoteResourceS3Decrypt/${filePath}` },
     'mustachetemplate': { remove: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
     'featureflagsetld': { remove: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
-    'encryptedresource': { remove: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
     'managedset': { remove: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
     'impersonationwebhook' : { remove: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
@@ -105,8 +129,17 @@ async function main() {
 
   let attempts = typeof (argv.a || argv.attempts) === 'number' ? argv.a || argv.attempts : 5;
   let timeout = typeof (argv.t || argv.timeout) === 'number' ? argv.t || argv.timeout : 5;
-  let timeoutMillSec = timeout * 60 * 1000;
-  let backoff = Math.floor(timeoutMillSec / Math.pow(2, attempts - 1));
+
+  // Handle deprecated resources
+  for( const resourceName of Object.getOwnPropertyNames( resourcesObj ) ) {
+    if( Object.hasOwn( deprecatedResourcesObj, resourceName ) ) {
+      delete resourcesObj[ resourceName ];
+    }
+  }
+  await removeDeprecatedResources( argvNamespace, force, attempts, timeout );
+
+  console.log( `PLC aborting!` );
+  process.exit(9);
 
   try {
     let resourceUris = Object.values(resourcesObj);
@@ -117,34 +150,8 @@ async function main() {
 
     for (let i = 0; i < resourceUris.length; i++) {
       if (removeAll || resourceUris[i].remove) {
-        log.info(`=========== Removing ${resources[i]}:${resourceUris[i].remove || 'Remove All Resources'} ===========`);
-        if (resources[i] === 'watchkeeper') {
-          let wkConfigJson = await readYaml(`${__dirname}/resources/wkConfig.yaml`, { desired_namespace: argvNamespace });
-          await deleteFile(wkConfigJson);
-        }
-        if (resources[i] === 'impersonationwebhook') {
-          let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, { desired_namespace: argvNamespace });
-          await deleteFile(webhookConfigJson);
-        }
-        let { file } = await download(resourceUris[i]);
-        file = yaml.loadAll(file);
-        let flatFile = flatten(file);
-        let crdIndex = flatFile.findIndex((el) => objectPath.get(el, 'kind') === 'CustomResourceDefinition');
-        if (crdIndex >= 0) {
-          let crd = flatFile.splice(crdIndex, 1)[0];
-          try {
-            await deleteFile(crd);
-            if (force) {
-              await forceCleanupCR(crd);
-            } else {
-              await crdDeleted(objectPath.get(crd, 'metadata.name'), attempts, backoff);
-            }
-          } catch (e) {
-            success = false;
-            log.error(`Timed out trying to safely clean up crd ${objectPath.get(crd, 'metadata.name')}.. use option '-f, --force' to force clean up (note: child resources wont be cleaned up)`);
-          }
-        }
-        await deleteFile(flatFile);
+        const removalSuccess = await removeResource( argvNamespace, resources[i], resourceUris[i], force, attempts, timeout );
+        if( !removalSuccess ) success = false;
       }
     }
 
@@ -170,12 +177,71 @@ async function main() {
         await deleteFile(preReq);
       } else {
         log.info(`Skipping namespace deletion: --namespace='${argvNamespace}' --delete-namespace='${dltNamespace}'`);
-      }i
+      }
     }
   } catch (e) {
     success = false;
     log.error(e);
   }
+}
+
+// Attempt to remove any deprecated resources
+async function removeDeprecatedResources( namespace, force, attempts, timeout ) {
+  log.info('=========== Removing Deprecated Resources ===========');
+  for( const deprecatedResourceKey of Object.getOwnPropertyNames(deprecatedResourcesObj) ) {
+    try {
+      await removeResource( namespace, deprecatedResourceKey, deprecatedResourcesObj[deprecatedResourceKey], force, attempts, timeout );
+    }
+    catch( e ) {
+      log.warn( e, `Failed to remove DEPRECATED resource '${deprecatedResourceKey}' -- if still present, manual removal is recommended.` );
+    }
+  }
+};
+
+async function removeResource( namespace, resource, resourceUri, force, attempts, timeout ) {
+  // defaults
+  timeout = timeout || 5;
+  attempts = attempts || 5;
+  const timeoutMillSec = timeout * 60 * 1000;
+  const backoff = Math.floor(timeoutMillSec / Math.pow(2, attempts - 1));
+
+  let removalSuccess = true;
+
+  log.info(`=========== Removing ${resource}:${resourceUri.remove || 'Remove All Resources'} ===========`);
+  if (resource === 'watchkeeper') {
+    let wkConfigJson = await readYaml(`${__dirname}/resources/wkConfig.yaml`, { desired_namespace: namespace });
+    await deleteFile(wkConfigJson);
+  }
+  if (resource === 'impersonationwebhook') {
+    let webhookConfigJson = await readYaml(`${__dirname}/resources/webhookConfig.yaml`, { desired_namespace: namespace });
+    await deleteFile(webhookConfigJson);
+  }
+
+  // If a resource is deprecated, it's yaml will be present already rather than being downloaded
+  let file = resourceUri.yaml;
+  if( !file ) {
+    file = (await download(resourceUri)).file;
+  }
+
+  file = yaml.loadAll(file);
+  let flatFile = flatten(file);
+  let crdIndex = flatFile.findIndex((el) => objectPath.get(el, 'kind') === 'CustomResourceDefinition');
+  if (crdIndex >= 0) {
+    let crd = flatFile.splice(crdIndex, 1)[0];
+    try {
+      await deleteFile(crd);
+      if (force) {
+        await forceCleanupCR(crd);
+      } else {
+        await crdDeleted(objectPath.get(crd, 'metadata.name'), attempts, backoff);
+      }
+    } catch (e) {
+      removalSuccess = false;
+      log.error(e, `Error trying to safely clean up crd ${objectPath.get(crd, 'metadata.name')}. When uninstalling, use option '-f, --force' to force clean up (note: child resources wont be cleaned up)`);
+    }
+  }
+  await deleteFile(flatFile);
+  return removalSuccess;
 }
 
 async function readYaml(path, templateOptions = {}) {
@@ -204,6 +270,9 @@ const pause = (duration) => new Promise(res => setTimeout(res, duration));
 
 async function crdDeleted(name, attempts = 5, backoffInterval = 3750) {
   let krm = await kc.getKubeResourceMeta('apiextensions.k8s.io/v1beta1', 'CustomResourceDefinition', 'get');
+  if( !krm ) {
+    krm = await kc.getKubeResourceMeta('apiextensions.k8s.io/v1', 'CustomResourceDefinition', 'get');
+  }
   let crdDltd = (await krm.get(name, undefined, { simple: false, resolveWithFullResponse: true })).statusCode === 404 ? true : false;
   if (crdDltd) {
     log.info(`Successfully deleted ${name}`);
@@ -219,12 +288,15 @@ async function crdDeleted(name, attempts = 5, backoffInterval = 3750) {
 }
 
 async function download(resourceUriObj) {
-  let install_version = (typeof resourceUriObj.install === 'string' && resourceUriObj.install.toLowerCase() !== 'latest') ? `download/${resourceUriObj.install}` : 'latest/download';
+  let version = (typeof resourceUriObj.install === 'string' && resourceUriObj.install.toLowerCase() !== 'latest') ? `download/${resourceUriObj.install}` : 'latest/download';
+  if( !version ) {
+    version = (typeof resourceUriObj.remove === 'string' && resourceUriObj.remove.toLowerCase() !== 'latest') ? `download/${resourceUriObj.remove}` : 'latest/download';
+  }
   if (argv['fp'] || argv['file-path']) {
     // if file-path is defined, use the version directly
-    install_version = `${resourceUriObj.install}`;
+    version = `${resourceUriObj.install || resourceUriObj.remove}`;
   }
-  let uri = resourceUriObj.uri.replace('{{install_version}}', install_version);
+  let uri = resourceUriObj.uri.replace('{{install_version}}', version);
   try {
     log.info(`Downloading ${uri}`);
     return { file: (await axios.get(uri)).data, uri: uri };
@@ -328,7 +400,6 @@ function createEventListeners() {
   process.on('beforeExit', (code) => {
     log.info(`No work found. exiting with code: ${code}`);
   });
-
 }
 
 async function run() {
@@ -341,9 +412,10 @@ async function run() {
     log.error(error);
     process.exit(1);
   }
-
 }
 
 module.exports = {
-  run
+  run,
+  removeDeprecatedResources,
+  deprecatedResourcesObj
 };

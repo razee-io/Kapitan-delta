@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 IBM Corp. All Rights Reserved.
+ * Copyright 2020, 2023 IBM Corp. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@ const fs = require('fs-extra');
 const axios = require('axios');
 const handlebars = require('handlebars');
 const forge = require('node-forge');
+
+const { deprecatedResourcesObj, removeDeprecatedResources } = require('./remove');
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -170,6 +172,14 @@ async function main() {
     'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
     'impersonationwebhook': { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };
+
+  // Handle deprecated resources
+  for( const resourceName of Object.getOwnPropertyNames( resourcesObj ) ) {
+    if( Object.hasOwn( deprecatedResourcesObj, resourceName ) ) {
+      delete resourcesObj[ resourceName ];
+    }
+  }
+  await removeDeprecatedResources( argvNamespace ); // No force, default retries and timeouts
 
   try {
     log.info('=========== Installing Prerequisites ===========');
@@ -401,7 +411,6 @@ async function download(resourceUriObj) {
     log.warn(`Failed to download ${uri}.. defaulting to ${latestUri}`);
     return { file: (await axios.get(latestUri)).data, uri: latestUri };
   }
-
 }
 
 async function decomposeFile(file, mode = 'replace') {
@@ -543,7 +552,6 @@ function createEventListeners() {
   process.on('beforeExit', (code) => {
     log.info(`No work found. exiting with code: ${code}`);
   });
-
 }
 
 async function run() {
@@ -556,7 +564,6 @@ async function run() {
     log.error(error);
     process.exit(1);
   }
-
 }
 
 module.exports = {

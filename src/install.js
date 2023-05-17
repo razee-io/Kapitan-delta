@@ -168,7 +168,6 @@ async function main() {
     'remoteresources3decrypt': { install: argv.rrs3d || argv['remoteresources3decrypt'], uri: `${fileSource}/RemoteResourceS3Decrypt/${filePath}` },
     'mustachetemplate': { install: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
     'featureflagsetld': { install: argv.ffsld || argv['featureflagsetld'], uri: `${fileSource}/FeatureFlagSetLD/${filePath}` },
-    'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` },
     'managedset': { install: argv.ms || argv['managedset'], uri: `${fileSource}/ManagedSet/${filePath}` },
     'impersonationwebhook': { install: argv.iw || argv['impersonationwebhook'], uri: `${fileSource}/ImpersonationWebhook/${filePath}` }
   };

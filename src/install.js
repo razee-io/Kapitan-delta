@@ -30,7 +30,7 @@ const axios = require('axios');
 const handlebars = require('handlebars');
 const forge = require('node-forge');
 
-const { deprecatedResourcesObj, removeDeprecatedResources } = require('./remove');
+const { purgeDeprecatedResources, removeDeprecatedResources } = require('./remove');
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -173,11 +173,7 @@ async function main() {
   };
 
   // Handle deprecated resources
-  for( const resourceName of Object.getOwnPropertyNames( resourcesObj ) ) {
-    if( Object.hasOwn( deprecatedResourcesObj, resourceName ) ) {
-      delete resourcesObj[ resourceName ];
-    }
-  }
+  purgeDeprecatedResources( resourcesObj );
   await removeDeprecatedResources( argvNamespace ); // No force, default retries and timeouts
 
   try {

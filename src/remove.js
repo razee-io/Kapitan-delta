@@ -131,15 +131,8 @@ async function main() {
   let timeout = typeof (argv.t || argv.timeout) === 'number' ? argv.t || argv.timeout : 5;
 
   // Handle deprecated resources
-  for( const resourceName of Object.getOwnPropertyNames( resourcesObj ) ) {
-    if( Object.hasOwn( deprecatedResourcesObj, resourceName ) ) {
-      delete resourcesObj[ resourceName ];
-    }
-  }
+  purgeDeprecatedResources( resourcesObj );
   await removeDeprecatedResources( argvNamespace, force, attempts, timeout );
-
-  console.log( `PLC aborting!` );
-  process.exit(9);
 
   try {
     let resourceUris = Object.values(resourcesObj);
@@ -184,6 +177,14 @@ async function main() {
     log.error(e);
   }
 }
+
+function purgeDeprecatedResources( resourcesObj ) {
+  for( const resourceName of Object.getOwnPropertyNames( deprecatedResourcesObj ) ) {
+    if( Object.hasOwn( resourcesObj, resourceName ) ) {
+      delete resourcesObj[ resourceName ];
+    }
+  }
+};
 
 // Attempt to remove any deprecated resources
 async function removeDeprecatedResources( namespace, force, attempts, timeout ) {
@@ -417,5 +418,5 @@ async function run() {
 module.exports = {
   run,
   removeDeprecatedResources,
-  deprecatedResourcesObj
+  purgeDeprecatedResources
 };

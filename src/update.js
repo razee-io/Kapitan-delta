@@ -25,7 +25,7 @@ const clone = require('clone');
 const objectPath = require('object-path');
 const handlebars = require('handlebars');
 
-const { deprecatedResourcesObj, removeDeprecatedResources } = require('./remove');
+const { purgeDeprecatedResources, removeDeprecatedResources } = require('./remove');
 
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
@@ -49,11 +49,8 @@ async function main() {
   };
 
   // Handle deprecated resources
-  for( const resourceName of Object.getOwnPropertyNames( resourcesObj ) ) {
-    if( Object.hasOwn( deprecatedResourcesObj, resourceName ) ) {
-      delete resourcesObj[ resourceName ];
-    }
-  }
+  // Handle deprecated resources
+  purgeDeprecatedResources( resourcesObj );
   await removeDeprecatedResources( argvNamespace ); // No force, default retries and timeouts
 
   let resourceUris = Object.values(resourcesObj);

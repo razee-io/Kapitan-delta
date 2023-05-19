@@ -27,6 +27,9 @@ const fs = require('fs-extra');
 const axios = require('axios');
 const handlebars = require('handlebars');
 
+var success = true;
+const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
+
 // Track deprecated resources that may be unable to retrieve YAML due to removal
 const deprecatedResourcesObj = {
   'encryptedresource': {
@@ -44,6 +47,7 @@ const deprecatedResourcesObj = {
           kind: Deployment
           metadata:
             name: encryptedresource-controller
+            namespace: ${argvNamespace}
         - apiVersion: apiextensions.k8s.io/v1
           kind: CustomResourceDefinition
           metadata:
@@ -51,9 +55,6 @@ const deprecatedResourcesObj = {
     `
   },
 };
-
-var success = true;
-const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
 
 async function main() {
   if (argv.h || argv.help) {

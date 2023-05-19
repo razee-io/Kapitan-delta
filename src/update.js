@@ -1,5 +1,5 @@
 /**
- * Copyright 2022 IBM Corp. All Rights Reserved.
+ * Copyright 2022, 2023 IBM Corp. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ const clone = require('clone');
 const objectPath = require('object-path');
 const handlebars = require('handlebars');
 
+const { purgeDeprecatedResources, removeDeprecatedResources } = require('./remove');
+
 var success = true;
 const argvNamespace = typeof (argv.n || argv.namespace) === 'string' ? argv.n || argv.namespace : 'razeedeploy';
 
@@ -44,8 +46,11 @@ async function main() {
     'clustersubscription': { install: argv.cs || argv['clustersubscription'], uri: `${fileSource}/ClusterSubscription/${filePath}` },
     'remoteresource': { install: argv.rr || argv['remoteresource'], uri: `${fileSource}/RemoteResource/${filePath}` },
     'mustachetemplate': { install: argv.mtp || argv['mustachetemplate'], uri: `${fileSource}/MustacheTemplate/${filePath}` },
-    'encryptedresource': { install: argv.er || argv['encryptedresource'], uri: `${fileSource}/EncryptedResource/${filePath}` }
   };
+
+  // Handle deprecated resources
+  purgeDeprecatedResources( resourcesObj );
+  await removeDeprecatedResources( argvNamespace ); // No force, default retries and timeouts
 
   let resourceUris = Object.values(resourcesObj);
   let installAll = resourceUris.reduce((shouldInstallAll, currentValue) => {
@@ -59,7 +64,6 @@ async function main() {
       await decomposeFile(file);
     }
   }
-  
 }
 
 async function download(resourceUriObj) {
@@ -77,7 +81,6 @@ async function download(resourceUriObj) {
     log.warn(`Failed to download ${uri}.. defaulting to ${latestUri}`);
     return await axios.get(latestUri);
   }
-
 }
 
 function readYaml(file) {
@@ -211,7 +214,6 @@ async function run() {
     log.error(error);
     process.exit(1);
   }
-
 }
 
 module.exports = {

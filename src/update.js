@@ -49,7 +49,6 @@ async function main() {
   };
 
   // Handle deprecated resources
-  // Handle deprecated resources
   purgeDeprecatedResources( resourcesObj );
   await removeDeprecatedResources( argvNamespace ); // No force, default retries and timeouts
 

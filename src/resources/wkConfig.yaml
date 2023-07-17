@@ -82,7 +82,6 @@ data:
   apps_v1_replicaset: 'true'
   apps_v1_statefulset: 'true'
   batch_v1_job: 'true'
-  batch_v1beta1_cronjob: 'true'
 ---
 apiVersion: v1
 kind: ConfigMap

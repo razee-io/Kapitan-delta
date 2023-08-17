@@ -80,4 +80,8 @@ spec:
         # see README.md for args options. https://github.com/razee-io/razeedeploy-delta/blob/master/README.md
       restartPolicy: Never
   backoffLimit: 2
+  # Fail job if not complete in 2h
+  activeDeadlineSeconds: 7200
+  # Delete finished jobs after 2h
+  ttlSecondsAfterFinished: 7200
 <%={{ }}=%>

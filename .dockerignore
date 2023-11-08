@@ -7,3 +7,6 @@ kubernetes/
 dev/
 test/
 .*
+
+# MEND unified agent
+wss-unified-agent.jar

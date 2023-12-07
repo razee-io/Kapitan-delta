@@ -31,6 +31,8 @@ script:
 
 before_deploy:
   - docker login -u="${QUAY_ID}" -p="${QUAY_TOKEN}" quay.io
+  # Use npm v9 for deployments (v10 has problems with authentication with api_key)
+  - npm install -g npm@9
 
 deploy:
   # Publish npm package with tag "next" on release candidates

@@ -150,7 +150,7 @@ async function main() {
     }
 
     log.info('=========== Removing Orphans ===========');
-    if (removeAll || (resourcesObj['clustersubscription'].remove && resourcesObj['watch-keeper'].remove)) {
+    if (removeAll || (resourcesObj['clustersubscription'].remove && resourcesObj['watchkeeper'].remove)) {
       // if watch-keeper and clustersubscription are removed in seperate runs, ridConfig will be left on the cluster
       let ridConfigJson = await readYaml(`${__dirname}/resources/ridConfig.yaml`, { desired_namespace: argvNamespace });
       await deleteFile(ridConfigJson);
@@ -164,6 +164,8 @@ async function main() {
     let preReqsJson = await readYaml(`${__dirname}/resources/preReqs.yaml`, { desired_namespace: argvNamespace });
     // When deleting a list of items, delete in reverse order (N->0, not 0->N) so that parents are deleted last
     // E.g. in this case, preReqs.yaml defines the ServiceAccount and ClusterRole before the ClusterRoleBinding. Deleting the ServiceAccount or ClusterRole first will cause an error when deleting the ClusterRoleBinding.
+    // Once the ClusterRoleBinding is deleted, the ServiceAccount will no longer be able to delete the ClusterRole or the ServiceAccount itself however, so tolerate errors (by persisting `success`).
+    let finalSuccess = success;
     for (let i = preReqsJson.length-1; i >= 0; i--) {
       let preReq = preReqsJson[i];
       let kind = objectPath.get(preReq, 'kind');
@@ -173,6 +175,7 @@ async function main() {
         log.info(`Skipping namespace deletion: --namespace='${argvNamespace}' --delete-namespace='${dltNamespace}'`);
       }
     }
+    success = finalSuccess; // Tolerate errors in this section
   } catch (e) {
     success = false;
     log.error(e);
@@ -285,7 +288,8 @@ async function crdDeleted(name, attempts = 5, backoffInterval = 3750) {
   } else {
     log.warn(`CRD ${name} not fully removed.. re-checking in: ${backoffInterval / 1000} sec, attempts remaining: ${attempts}`);
     await pause(backoffInterval);
-    return crdDeleted(name, attempts, backoffInterval * 2);
+    await crdDeleted(name, attempts, backoffInterval * 2);
+    return;
   }
 }
 

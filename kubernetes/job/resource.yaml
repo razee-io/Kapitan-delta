@@ -76,8 +76,13 @@ spec:
         - name: USER_AGENT_VERSION
           value: "<%TRAVIS_TAG%>"
         command: ["./bin/razeedeploy-delta", "{{ COMMAND }}", "--namespace={{{ NAMESPACE }}}"]
-        args: {{ ARGS_ARRAY }}
+        args: ["{{ ARGS_ARRAY }}"]
         # see README.md for args options. https://github.com/razee-io/razeedeploy-delta/blob/master/README.md
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            memory: 75Mi
       restartPolicy: Never
   backoffLimit: 2
   # Fail job if not complete in 2h

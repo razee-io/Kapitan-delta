@@ -13,6 +13,7 @@ before_install:
   - export WS_PRODUCTNAME=${WS_PRODUCTNAME}
   - export WS_PROJECTNAME=razeedeploy-delta
   - export WS_WSS_URL=https://ibmets.whitesourcesoftware.com/agent
+  - ./build/download-kubelint.sh
 
 script:
   # Audit npm packages. Fail build whan a PR audit fails, otherwise report the vulnerability and proceed.
@@ -26,6 +27,8 @@ script:
   - docker images
   - ./build/process-template.sh kubernetes/razeedeploy-delta/resource.yaml >/tmp/resource.yaml
   - ./build/process-template.sh kubernetes/job/resource.yaml >/tmp/job.yaml
+  - kubelint /tmp/resource.yaml
+  - kubelint /tmp/job.yaml
   # Perform UA scan on non-PR builds
   - if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent.jar; java -jar wss-unified-agent.jar -d . || echo "UA Scan Error occurred"; fi
 

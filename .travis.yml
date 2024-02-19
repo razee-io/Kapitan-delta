@@ -27,8 +27,7 @@ script:
   - docker images
   - ./build/process-template.sh kubernetes/razeedeploy-delta/resource.yaml >/tmp/resource.yaml
   - ./build/process-template.sh kubernetes/job/resource.yaml >/tmp/job.yaml
-  - sed 's/{{ ARGS_ARRAY }}/["--rr", "--wk", "-a"]/' /tmp/job.yaml > /tmp/jobwargs.yaml
-  - cat /tmp/jobwargs.yaml
+  - sed 's/{{ ARGS_ARRAY }}/["--rr", "--wk", "-a"]/' /tmp/job.yaml > /tmp/jobwargs.yaml # doing this because the kube linter doesn't know about mustache syntax and complains about {{ ARGS_ARRAY }}
   - kubelint /tmp/resource.yaml
   - kubelint /tmp/jobwargs.yaml
   # Perform UA scan on non-PR builds

@@ -76,7 +76,7 @@ spec:
         - name: USER_AGENT_VERSION
           value: "<%TRAVIS_TAG%>"
         command: ["./bin/razeedeploy-delta", "{{ COMMAND }}", "--namespace={{{ NAMESPACE }}}"]
-        args: ["{{ ARGS_ARRAY }}"]
+        args: {{ ARGS_ARRAY }}
         # see README.md for args options. https://github.com/razee-io/razeedeploy-delta/blob/master/README.md
         resources:
           limits:
